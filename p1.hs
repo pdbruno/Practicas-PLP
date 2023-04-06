@@ -64,7 +64,7 @@ flipRaro = flip flip
 
 Ejercicio 2
 i. Denir la función curry, que dada una función de dos argumentos, devuelve su equivalente curricada.
-ii. Denir la función uncurry, que dada una función curricada de dos argumentos, devuelve su versión no
+ii. Denir la función uncurry2, que dada una función curricada de dos argumentos, devuelve su versión no
 curricada equivalente. Es la inversa de la anterior.
 iii. ¾Se podría denir una función curryN, que tome una función de un número arbitrario de argumentos y
 devuelva su versión curricada?
@@ -76,7 +76,7 @@ lo que si seria posible es usar listas en vez de tuplas
 
 curry f a b = f (a, b)
 
-uncurry f (a, b) = f a b
+uncurry2 f (a, b) = f a b
 
 {-
 Ejercicio 3
@@ -281,18 +281,34 @@ anteriores
 entrelazar :: [a] -> [a] -> [a]
 entrelazar = foldr (\x rec ys -> if null ys then x : rec ys else x : head ys : rec (tail ys)) id
 
-
 {- Ejercicio 12 F
 El siguiente esquema captura la recursión primitiva sobre listas.
-recr::(a->[a]->b->b)->b->[a]->b
-recr \_ z [] = z
-recr f z (x:xs) = f x xs (recr f z xs)
+
 a. Denir la función sacarUna :: Eq a => a -> [a] -> [a], que dados un elemento y una lista devuelve el
 resultado de eliminar de la lista la primera aparición del elemento (si está presente).
 b. Explicar por qué el esquema foldr no es adecuado para implementar la función sacarUna del punto anterior.
 c. Denr la función insertarOrdenado :: Ord a => a -> [a] -> [a] que inserta un elemento en una lista
 ordenada (de manera creciente), de manera que se preserva el ordenamiento.
 d. La función listasQueSuman del ejercicio 7, ¾se ajusta al esquema de recursión recr? ¾Por qué o por qué no? -}
+
+recr :: (a -> [a] -> b -> b) -> b -> [a] -> b
+recr _ z [] = z
+recr f z (x : xs) = f x xs (recr f z xs)
+
+sacarUna :: Eq a => a -> [a] -> [a]
+sacarUna e = recr (\x xs rec -> if x == e then xs else x : rec) []
+
+insertarOrdenado :: Ord a => a -> [a] -> [a]
+insertarOrdenado n = recr (\x xs rec -> if n < x then n : x : xs else x : rec) []
+
+{- >>>sacarUna 3 [2, 3, 4, 4, 5, 3]
+[2,4,4,5,3]
+
+>>> insertarOrdenado 4 [1, 2, 5, 6]
+[1,2,4,5,6]
+
+listas que suman usa recursion global
+-}
 
 {- Ejercicio 13
 La técnica de Divide & Conquer consiste en dividir un problema en problemas más fáciles de resolver y luego
@@ -318,12 +334,39 @@ map :: (a -> b) -> [a] -> [b]
 filter :: (a -> Bool) -> [a] -> [a]
  -}
 
+type DivideConquer a b =
+  (a -> Bool) -> -- determina si es o no el caso trivial
+  (a -> b) -> -- resuelve el caso trivial
+  (a -> [a]) -> -- parte el problema en sub-problemas
+  ([b] -> b) -> -- combina resultados
+  a -> -- estructura de entrada
+  b -- resultado
+
+dc :: DivideConquer a b
+dc trivial solve split combine x = if trivial x then solve x else combine (map rec (split x))
+  where
+    rec = dc trivial solve split combine
+
+mergeSort :: Ord a => [a] -> [a]
+mergeSort = dc ((== 1) . length) id (\x -> [take (div (length x) 2) x, drop (div (length x) 2) x]) (\[xs, ys] -> foldr insertarOrdenado xs ys)
+
+-- >>> mergeSort [5, 4, 3, 2, 1, 0]
+-- [0,1,2,3,4,5]
+
 {- Ejercicio 14
-i. Denir la función genLista :: a -> (a -> a) -> Integer -> [a], que genera una lista de una cantidad dada de elementos, a partir de un elemento inicial y de una función de incremento entre los elementos
+i. Denir la función genLista :: a -> (a -> a) -> Integer -> [a], que genera una lista de una cantidad dada de elementos,
+a partir de un elemento inicial y de una función de incremento entre los elementos
 de la lista. Dicha función de incremento, dado un elemento de la lista, devuelve el elemento siguiente.
 ii. Usando genLista, denir la función desdeHasta, que dado un par de números (el primero menor que el
 segundo), devuelve una lista de números consecutivos desde el primero hasta el segundo. -}
 
+genLista :: a -> (a -> a) -> Integer -> [a]
+genLista inicial gen cant = foldr (\_ rec -> rec ++ [head rec]) [inicial] [0 .. cant]
+
+desdeHasta :: Integer -> Integer -> [Integer]
+desdeHasta desde hasta = genLista desde succ (hasta - desde)
+
+-- >>> desdeHasta 3 7
 {- Ejercicio 15 F
 Denir las siguientes funciones para trabajar sobre listas, y dar su tipo. Todas ellas deben poder aplicarse a
 listas nitas e innitas.
@@ -338,6 +381,14 @@ iii. mapDoble, una variante de mapPares, que toma una función curricada de dos
 (de igual longitud), y devuelve una lista de aplicaciones de la función a cada elemento correspondiente de
 las dos listas. Esta función en Haskell se llama zipWith.
  -}
+mapPares :: (a -> b -> c) -> [(a, b)] -> [c]
+mapPares f = map (uncurry f)
+
+armarPares :: [a] -> [b] -> [(a, b)]
+armarPares = foldr (\x rec ys -> if null ys then [] else (x, head ys) : rec (tail ys)) (const [])
+
+mapDoble :: (a -> b -> c) -> [a] -> [b] -> [c]
+mapDoble f a b = mapPares f (armarPares a b)
 
 {- Ejercicio 16
 i. Escribir la función sumaMat, que representa la suma de matrices, usando zipWith. Representaremos una
@@ -352,14 +403,20 @@ entrada es una lista de N listas, todas de longitud M, entonces el resultado deb
 longitud N.
 trasponer :: [[Int]] -> [[Int]] -}
 
+sumaMat :: [[Int]] -> [[Int]] -> [[Int]]
+sumaMat = zipWith (zipWith (+))
+
+trasponer :: [[Int]] -> [[Int]]
+trasponer m = foldr (zipWith (:)) (map (const []) m) m
+
+-- >>> trasponer [[1,2], [3,4], [5,6]]
+-- [[1,3,5],[2,4,6]]
+
 {- Ejercicio 17 F
 Denimos la función generate, que genera listas en base a un predicado y una función, de la siguiente
 manera:
-generate :: ([a] -> Bool) -> ([a] -> a) -> [a]
-generate stop next = generateFrom stop next []
-generateFrom:: ([a] -> Bool) -> ([a] -> a) -> [a] -> [a]
-generateFrom stop next xs | stop xs = init xs
-\| otherwise = generateFrom stop next (xs ++ [next xs])
+...
+
 i. Usando generate, denir generateBase::([a] -> Bool) -> a -> (a -> a) -> [a], similar a
 generate, pero con un caso base para el elemento inicial, y una función que, en lugar de calcular el siguiente
 elemento en base a la lista completa, lo calcula a partir del último elemento. Por ejemplo: generateBase
@@ -370,3 +427,254 @@ iii. Usando generateBase, denir iterateN :: Int -> (a -> a) -> a -> [a] que, to
 función f y un elemento inicial x, y devuelve la lista [x, f x, f (f x), ..., f ( ...(f x) ...)] de
 longitud n. Nota: iterateN n f x = take n (iterate f x).
 iv. Redenir generateFrom usando iterate y takeWhile. -}
+
+generate :: ([a] -> Bool) -> ([a] -> a) -> [a]
+generate stop next = generateFrom stop next []
+
+generateFrom :: ([a] -> Bool) -> ([a] -> a) -> [a] -> [a]
+generateFrom stop next xs
+  | stop xs = init xs
+  | otherwise = generateFrom stop next (xs ++ [next xs])
+
+generateBase :: ([a] -> Bool) -> a -> (a -> a) -> [a]
+generateBase stop inicial next = generate stop (\xs -> if null xs then next inicial else next (last xs))
+
+-- >>>generateBase (\l->not (null l) && (last l > 256)) 1 (*2)
+-- [2,4,8,16,32,64,128,256]
+factoriales :: Int -> [Int]
+factoriales n = generate ((n <) . length) (\xs -> if null xs then 1 else length xs * last xs)
+
+-- >>>factoriales 6
+-- [1,1,2,6,24,120]
+
+iterateN :: Int -> (a -> a) -> a -> [a]
+iterateN n f x = generateBase ((n ==) . length) x f
+
+{- generateFrom2 :: ([a] -> Bool) -> ([a] -> a) -> [a] -> [a]
+generateFrom2 stop next xs = takeWhile (not . stop) (iterate next xs)
+no tipa
+-}
+
+{-
+Ejercicio 18 F
+i. Denir y dar el tipo del esquema de recursión foldNat sobre los naturales. Utilizar el tipo Integer de
+Haskell (la función va a estar denida sólo para los enteros mayores o iguales que 0).
+ii. Utilizando foldNat, denir la función potencia.
+ -}
+
+foldNat :: (Integer -> b -> b) -> b -> Integer -> b
+foldNat f base 0 = base
+foldNat f base n = f n (foldNat f base (n - 1))
+
+potencia :: Integer -> Integer -> Integer
+potencia base = foldNat (\_ rec -> rec * base) 1
+
+-- >>>potencia 2 3
+-- 16
+
+{- En este ejercicio trabajaremos con matrices innitas representadas como funciones:
+type MatrizInfinita a = Int->Int->a
+donde el primer argumento corresponde a la la, el segundo a la columna y el resultado al valor contenido
+en la celda correspondiente.
+Por ejemplo, las siguientes deniciones:
+identidad = \i j->if i==j then 1 else 0
+cantor = \x y->(x+y)*(x+y+1)`div`2+y
+pares = \x y->(x,y)
+corresponden a las matrices:
+identidad
+1 0 0 · · ·
+0 1 0 · · ·
+0 0 1 · · ·
+.
+cantor
+0 2 5 · · ·
+1 4 8 · · ·
+3 7 12 · · ·
+.
+pares
+(0,0) (0,1) (0,2) · · ·
+(1,0) (1,1) (1,2) · · ·
+(2,0) (2,1) (2,2) · · ·
+.
+
+Denir las siguientes funciones:
+i. fila::Int->MatrizInfinita a->[a] y columna::Int->MatrizInfinita a->[a] que, dado un índice,
+devuelven respectivamente la la o la columna correspondiente en la matriz (en forma de lista innita).
+Por ejemplo, fila 0 identidad devuelve la lista con un 1 seguido de innitos 0s.
+ii. trasponer::MatrizInfinita a->MatrizInfinita a, que dada una matriz devuelve su transpuesta.
+iii. mapMatriz::(a->b)->MatrizInfinita a->MatrizInfinita b,
+filterMatriz::(a->Bool)->MatrizInfinita a->[a] y
+zipWithMatriz::(a->b->c)->MatrizInfinita a->MatrizInfinita b->MatrizInfinita c, que se
+comportan como map, filter y zipWith respectivamente, pero aplicadas a matrices innitas. En el caso
+de filterMatriz no importa el orden en el que se devuelvan los elementos, pero se debe pasar una y sólo
+una vez por cada posición de la matriz.
+iv. suma::Num a=>MatrizInfinita a->MatrizInfinita a->MatrizInfinita a, y
+zipMatriz::MatrizInfinita a->MatrizInfinita b->MatrizInfinita (a,b). Denir ambas utilizando zipWithMatriz.
+ -}
+
+type MatrizInfinita a = Int -> Int -> a
+
+fila :: Int -> MatrizInfinita a -> [a]
+fila i m = map (m i) [0 ..]
+
+columna :: Int -> MatrizInfinita a -> [a]
+columna i m = map (flip m i) [0 ..]
+
+trasponerMat :: MatrizInfinita a -> MatrizInfinita a
+trasponerMat = flip
+
+mapMatriz :: (a -> b) -> MatrizInfinita a -> MatrizInfinita b
+mapMatriz f m i j = f $ m i j
+
+filterMatriz :: (a -> Bool) -> MatrizInfinita a -> [a]
+filterMatriz p m = [m i j | z <- [0..], i <- [0..z], j <- [0..z], i + j == z, p (m i j)]
+
+zipWithMatriz::(a->b->c)->MatrizInfinita a->MatrizInfinita b->MatrizInfinita c
+zipWithMatriz f m1 m2 i j = f (m1 i j) (m2 i j)
+
+suma::Num a=>MatrizInfinita a->MatrizInfinita a->MatrizInfinita a
+suma = zipWithMatriz (+)
+zipMatriz::MatrizInfinita a->MatrizInfinita b->MatrizInfinita (a,b)
+zipMatriz = zipWithMatriz (,)
+
+{- Ejercicio 22 F
+Sea el siguiente tipo, que representa a los árboles binarios:
+data AB a = Nil | Bin (AB a) a (AB a)
+i. Denir los esquemas de recursión estructural (foldAB) y primitiva (recAB), y dar su tipo.
+ii. Denir las funciones esNil y cantNodos (para esNil puede utilizarse case en lugar de foldAB o recAB).
+iii. Denir la función mejorSegún :: (a -> a -> Bool) -> AB a -> a, análoga a la del ejercicio 9, para árboles.
+Se recomienda denir una función auxiliar para comparar la raíz con un posible resultado de la recursión
+para un árbol que puede o no ser Nil.
+iv. Denir la función esABB :: Ord a => AB a -> Bool que chequea si un árbol es un árbol binario de búsqueda.
+v. Justicar la elección de los esquemas de recursión utilizados para los tres puntos anteriores.
+ -}
+
+data AB a = Nil | Bin (AB a) a (AB a)
+
+foldAB :: b -> (a -> b -> b -> b) -> AB a -> b
+foldAB base _ Nil = base
+foldAB base f (Bin sub1 x sub2) = f x (foldAB base f sub1) (foldAB base f sub2)
+
+recAB :: b -> (a -> b -> b -> AB a -> AB a -> b) -> AB a -> b
+recAB base _ Nil = base
+recAB base f (Bin sub1 x sub2) = f x (recAB base f sub1) (recAB base f sub2) sub1 sub2
+
+esNil :: AB a -> Bool
+esNil ab = case ab of
+  Nil -> True
+  _ -> False
+
+cantNodos :: AB a -> Int
+cantNodos = foldAB 0 (\_ rec1 rec2 -> 1 + rec1 + rec2)
+
+mejorSegúnAB :: (a -> a -> Bool) -> AB a -> a
+mejorSegúnAB p (Bin sub1 x sub2) = recAB x (seleccionarMejor (quedarseConMejor p)) (Bin sub1 x sub2)  
+  where quedarseConMejor p x x2 = if p x x2 then x else x2
+
+seleccionarMejor :: (a -> a -> a) -> a -> a -> a -> AB a -> AB a -> a
+seleccionarMejor mejor x mejorSub1 mejorSub2 sub1 sub2 
+  | esNil sub1 && esNil sub2 = x
+  | esNil sub1 = mejor x mejorSub2
+  | esNil sub2 = mejor x mejorSub1
+  | otherwise = mejor (mejor x mejorSub2) mejorSub1
+
+esABB :: Ord a => AB a -> Bool
+esABB = recAB True (\x rec1 rec2 sub1 sub2 -> (esNil sub1 || extraer sub1 < x) && (esNil sub2 || extraer sub2 > x) && rec1 && rec2)
+
+extraer (Bin _ x _) = x
+{- Ejercicio 23
+Dado el tipo AB a del ejercicio 22:
+i. Denir las altura, ramas, cantHojas y espejo.
+ii. Denir la función mismaEstructura :: AB a -> AB b -> Bool que, dados dos árboles, indica si éstos
+tienen la misma forma, independientemente del contenido de sus nodos. Pista: usar evaluación parcial y
+recordar el ejercicio 16.
+ -}
+altura :: AB a -> Int
+altura = foldAB 0 (\_ rec1 rec2 -> 1 + max rec1 rec2)
+cantHojas :: AB a -> Int
+cantHojas = recAB 0 (\_ rec1 rec2 sub1 sub2 -> (if esNil sub1 && esNil sub2 then 1 else 0) + rec1 + rec2)
+ramas = foldAB [[]] (\x ramas1 ramas2 -> map (x:) ramas1 ++ map (x:) ramas2)
+espejo = foldAB Nil (\x esp1 esp2 -> Bin esp2 x esp1)
+
+mismaEstructura :: AB a -> AB b -> Bool
+mismaEstructura = foldAB esNil (\_ mismaSub1 mismaSub2 ab -> not (esNil ab) && mismaSub1 (izq ab) && mismaSub2 (der ab))
+  where 
+    izq (Bin ab _ _) = ab
+    der (Bin _ _ ab) = ab
+
+{- Ejercicio 24
+Se desea modelar en Haskell los árboles con información en las hojas (y sólo en ellas). Para esto introduciremos
+el siguiente tipo:
+data AIH a = Hoja a | Bin (AIH a) (AIH a)
+a) Denir el esquema de recursión estructural foldAIH y dar su tipo. Por tratarse del primer esquema de
+recursión que tenemos para este tipo, se permite usar recursión explícita.
+b) Escribir las funciones altura :: AIH a -> Integer y tamaño :: AIH a -> Integer.
+Considerar que la altura de una hoja es 1 y el tamaño de un AIH es su cantidad de hojas.
+c) Denir la lista (innita) de todos los AIH cuyas hojas tienen tipo ()1
+. Se recomienda denir una función
+auxiliar. Para este ejercicio se permite utilizar recursión explícita.
+d) Explicar por qué la recursión utilizada en el punto c) no es estructural.
+ -}
+
+data AIH a = Hoja a | Bin2 (AIH a) (AIH a)
+foldAIH :: (a -> b) ->  (b -> b -> b) -> AIH a -> b
+foldAIH base bin (Hoja a) = base a
+foldAIH base bin (Bin2 a b) = bin (foldAIH base bin a) (foldAIH base bin b) 
+
+{- Ejercicio 26 F
+Las máquinas de estados no determinísticas (MEN) se pueden ver como una descripción de un sistema que,
+al recibir como entrada una constante de un alfabeto (que en general llamamos Σ), y encontrándose en un
+estado q, altera su estado según lo indique una función de transición (que en general llamamos δ). Observemos
+que al ser una máquina no determinística, el resultado de esta función de transición no es un único estado sino
+un conjunto de ellos. Modelaremos estos autómatas mediante el tipo MEN2
+.
+data MEN a b = AM {sigma :: [a], delta :: (a -> b -> [b])}
+Luego, el sistema representado por m :: MEN a b que se encuentra en un estado q :: b , después de recibir
+una entrada s :: a tal que s ∈ sigma m, se encontrará en alguno de los estados delta m s q (si esta lista
+es vacía signica que s es una transición inválida, mientras que si contiene muchos estados, signica que puede
+alcanzar cuaquiera de ellos, sin que podamos suponer nada sobre cuál será).
+
+Se pide denir las siguientes funciones, sin utilizar recursión explícita:
+3
+.
+i. a) agregarTransicion :: a -> b -> b -> MEN a b -> MEN a b que, dada una constante s y dos
+estados q0 y qf , agrega al autómata la transición por s desde q0 a qf . Si lo necesita, puede suponer
+que la transición no está previamente denida en el autómata, que s ya pertenece al alfabeto y que
+está denida la igualdad para los tipos a y b, indicando qué suposiciones realiza y por qué.
+b) interseccion :: Eq a => MEN a b -> MEN a c -> MEN a (b,c) que dados dos autómatas m y
+n, devuelve el autómata intersección, cuyo alfabeto es la intersección de los dos alfabetos, cuyos
+estados son el producto cartesiano del conjunto de estados de cada uno y que puede moverse de
+(qm, qn) por el símbolo s al estado (q
+0
+m, q0
+n
+) si y solo si m puede moverse de qm a q
+0
+m por s y n puede
+moverse de qn a q
+0
+n por el mismo s.
+ii. consumir :: MEN a b -> b -> [a] -> [b] que, dados un autómata m, un estado q y una cadena de
+símbolos ss, devuelve todos los estados en los que se puede encontrar m después de haber leido los símbolos
+de ss (en ese orden), habiendo partido del estado q. Si lo necesita, puede suponer denida la igualdad
+para los tipos a y b.
+En el autómata de ejemplo, consumir MP LP q0 “pl” ❀ [q2,q3]
+iii. trazas :: MEN a b -> b -> [[a]] que, dado un autómata m y un estado q, devuelve la lista con todas
+las trazas posibles en m a partir de q, es decir, todas las cadenas de símbolos que pueden llevar a m desde
+q a algún estado mediante transiciones válidas.
+Asumir que existe al menos un ciclo en el autómata, por lo que la lista resultante es innita. Si lo necesita,
+puede suponer que tanto el alfabeto como el resultado de las transiciones son nitos, y que está denida
+la igualdad para los tipos a y b. Deberá indicar qué suposiciones realiza y por qué.
+En el autómata de ejemplo, trazas MP LP q0 ❀ [[0p
+0], [0p
+0,
+0
+l
+0], [0p
+0,
+0
+l
+0,
+0p
+0]]
+ -}
