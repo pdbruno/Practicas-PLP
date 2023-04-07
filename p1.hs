@@ -1,3 +1,5 @@
+import Data.List (intersect, union)
+
 {-
 
 Ejercicio 1
@@ -527,14 +529,15 @@ mapMatriz :: (a -> b) -> MatrizInfinita a -> MatrizInfinita b
 mapMatriz f m i j = f $ m i j
 
 filterMatriz :: (a -> Bool) -> MatrizInfinita a -> [a]
-filterMatriz p m = [m i j | z <- [0..], i <- [0..z], j <- [0..z], i + j == z, p (m i j)]
+filterMatriz p m = [m i j | z <- [0 ..], i <- [0 .. z], j <- [0 .. z], i + j == z, p (m i j)]
 
-zipWithMatriz::(a->b->c)->MatrizInfinita a->MatrizInfinita b->MatrizInfinita c
+zipWithMatriz :: (a -> b -> c) -> MatrizInfinita a -> MatrizInfinita b -> MatrizInfinita c
 zipWithMatriz f m1 m2 i j = f (m1 i j) (m2 i j)
 
-suma::Num a=>MatrizInfinita a->MatrizInfinita a->MatrizInfinita a
+suma :: Num a => MatrizInfinita a -> MatrizInfinita a -> MatrizInfinita a
 suma = zipWithMatriz (+)
-zipMatriz::MatrizInfinita a->MatrizInfinita b->MatrizInfinita (a,b)
+
+zipMatriz :: MatrizInfinita a -> MatrizInfinita b -> MatrizInfinita (a, b)
 zipMatriz = zipWithMatriz (,)
 
 {- Ejercicio 22 F
@@ -568,11 +571,12 @@ cantNodos :: AB a -> Int
 cantNodos = foldAB 0 (\_ rec1 rec2 -> 1 + rec1 + rec2)
 
 mejorSegúnAB :: (a -> a -> Bool) -> AB a -> a
-mejorSegúnAB p (Bin sub1 x sub2) = recAB x (seleccionarMejor (quedarseConMejor p)) (Bin sub1 x sub2)  
-  where quedarseConMejor p x x2 = if p x x2 then x else x2
+mejorSegúnAB p (Bin sub1 x sub2) = recAB x (seleccionarMejor (quedarseConMejor p)) (Bin sub1 x sub2)
+  where
+    quedarseConMejor p x x2 = if p x x2 then x else x2
 
 seleccionarMejor :: (a -> a -> a) -> a -> a -> a -> AB a -> AB a -> a
-seleccionarMejor mejor x mejorSub1 mejorSub2 sub1 sub2 
+seleccionarMejor mejor x mejorSub1 mejorSub2 sub1 sub2
   | esNil sub1 && esNil sub2 = x
   | esNil sub1 = mejor x mejorSub2
   | esNil sub2 = mejor x mejorSub1
@@ -582,6 +586,7 @@ esABB :: Ord a => AB a -> Bool
 esABB = recAB True (\x rec1 rec2 sub1 sub2 -> (esNil sub1 || extraer sub1 < x) && (esNil sub2 || extraer sub2 > x) && rec1 && rec2)
 
 extraer (Bin _ x _) = x
+
 {- Ejercicio 23
 Dado el tipo AB a del ejercicio 22:
 i. Denir las altura, ramas, cantHojas y espejo.
@@ -591,14 +596,17 @@ recordar el ejercicio 16.
  -}
 altura :: AB a -> Int
 altura = foldAB 0 (\_ rec1 rec2 -> 1 + max rec1 rec2)
+
 cantHojas :: AB a -> Int
 cantHojas = recAB 0 (\_ rec1 rec2 sub1 sub2 -> (if esNil sub1 && esNil sub2 then 1 else 0) + rec1 + rec2)
-ramas = foldAB [[]] (\x ramas1 ramas2 -> map (x:) ramas1 ++ map (x:) ramas2)
+
+ramas = foldAB [[]] (\x ramas1 ramas2 -> map (x :) ramas1 ++ map (x :) ramas2)
+
 espejo = foldAB Nil (\x esp1 esp2 -> Bin esp2 x esp1)
 
 mismaEstructura :: AB a -> AB b -> Bool
 mismaEstructura = foldAB esNil (\_ mismaSub1 mismaSub2 ab -> not (esNil ab) && mismaSub1 (izq ab) && mismaSub2 (der ab))
-  where 
+  where
     izq (Bin ab _ _) = ab
     der (Bin _ _ ab) = ab
 
@@ -617,9 +625,21 @@ d) Explicar por qué la recursión utilizada en el punto c) no es estructural.
  -}
 
 data AIH a = Hoja a | Bin2 (AIH a) (AIH a)
-foldAIH :: (a -> b) ->  (b -> b -> b) -> AIH a -> b
+
+foldAIH :: (a -> b) -> (b -> b -> b) -> AIH a -> b
 foldAIH base bin (Hoja a) = base a
-foldAIH base bin (Bin2 a b) = bin (foldAIH base bin a) (foldAIH base bin b) 
+foldAIH base bin (Bin2 a b) = bin (foldAIH base bin a) (foldAIH base bin b)
+
+arbolesDeAltura :: Int -> [AIH ()]
+arbolesDeAltura 1 = [Hoja ()]
+arbolesDeAltura n = [Bin2 nMenos1 rec | nMenos1 <- arbolesDeAltura (n - 1), x <- [1 .. n - 1], rec <- arbolesDeAltura x] ++ [Bin2 rec nMenos1 | nMenos1 <- arbolesDeAltura (n - 1), x <- [1 .. n], rec <- arbolesDeAltura x]
+
+{- recursion global etc -}
+
+{-
+>>> arbolesDeAltura 2
+ -}
+todosLosAIH = [arbolesDeAltura n | n <- [0 ..]]
 
 {- Ejercicio 26 F
 Las máquinas de estados no determinísticas (MEN) se pueden ver como una descripción de un sistema que,
@@ -644,16 +664,8 @@ está denida la igualdad para los tipos a y b, indicando qué suposiciones real
 b) interseccion :: Eq a => MEN a b -> MEN a c -> MEN a (b,c) que dados dos autómatas m y
 n, devuelve el autómata intersección, cuyo alfabeto es la intersección de los dos alfabetos, cuyos
 estados son el producto cartesiano del conjunto de estados de cada uno y que puede moverse de
-(qm, qn) por el símbolo s al estado (q
-0
-m, q0
-n
-) si y solo si m puede moverse de qm a q
-0
-m por s y n puede
-moverse de qn a q
-0
-n por el mismo s.
+(qm, qn) por el símbolo s al estado (q'm, q'n) si y solo si m puede moverse de qm a q'm por s y n puede
+moverse de qn a q'n por el mismo s.
 ii. consumir :: MEN a b -> b -> [a] -> [b] que, dados un autómata m, un estado q y una cadena de
 símbolos ss, devuelve todos los estados en los que se puede encontrar m después de haber leido los símbolos
 de ss (en ese orden), habiendo partido del estado q. Si lo necesita, puede suponer denida la igualdad
@@ -678,3 +690,19 @@ l
 0p
 0]]
  -}
+
+data MEN a b = AM {sigma :: [a], delta :: a -> b -> [b]}
+
+agregarTransicion :: (Eq a, Eq b) => a -> b -> b -> MEN a b -> MEN a b
+agregarTransicion s q0 qf aut = AM {sigma = union [s] (sigma aut), delta = \trans estado -> delta aut trans estado ++ if trans == s && estado == q0 then [qf] else []}
+
+interseccion :: Eq a => MEN a b -> MEN a c -> MEN a (b, c)
+interseccion m n = AM {sigma = intersect (sigma m) (sigma n), delta = \trans (qm, qn) -> [(qPrimaM, qPrimaN) | qPrimaM <- delta m trans qm, qPrimaN <- delta n trans qn]}
+
+consumir :: MEN a b -> b -> [a] -> [b]
+consumir m q = foldl (\rec s -> concatMap (delta m s) rec) [q]
+
+trazas :: MEN a b -> b -> [[a]]
+trazas m q = Prelude.filter (not . null . consumir m q) [cadena | n <- [0 ..], cadena <- cadenasDeLong n]
+  where
+    cadenasDeLong = foldNat (\_ cadenasDeLongNMenos1 -> [s : cadenaNMenos1 | s <- sigma m, cadenaNMenos1 <- cadenasDeLongNMenos1]) []
